@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffbd32">
+  <meta name="description" content="ДВОР — интерактивная карта личных историй Москвы. Откройте место, послушайте воспоминания и соберите свою прогулку.">
+  <title>ДВОР — у каждого места есть голос</title>
+  <link rel="icon" type="image/svg+xml" href="assets/mark.svg">
+  <link rel="stylesheet" href="assets/leaflet.css">
+  <link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+  <main class="intro-screen" id="introScreen" aria-labelledby="introTitle">
+    <header class="intro-header">
+      <div class="intro-brand"><img src="assets/mark.svg" alt=""><span>Двор<span class="brand-dot">.</span></span></div>
+      <span class="intro-city"><span class="live-dot"></span> Москва, которая помнит</span>
+    </header>
+    <div class="intro-collage" aria-hidden="true">
+      <figure class="intro-photo intro-photo-left"><img src="assets/photos/entrance.webp" alt="" fetchpriority="high"><figcaption>Сокольники / место встречи</figcaption></figure>
+      <figure class="intro-photo intro-photo-right"><img src="assets/photos/chistye.webp" alt=""><figcaption>Чистые пруды / ещё один голос</figcaption></figure>
+      <div class="intro-note"><img src="assets/mark.svg" alt=""><span>У каждого места<br>есть голос.</span><small>Двор / живая память</small></div>
+    </div>
+    <div class="intro-center">
+      <div class="intro-eyebrow">Карта личных воспоминаний</div>
+      <h1 id="introTitle">Открой истории<br>своего района<span class="amber-dot">.</span></h1>
+      <p>Знакомые улицы. Личные воспоминания.<br>Послушай город и собери свою прогулку.</p>
+      <button class="button dark intro-cta" id="enterMap">Исследовать карту <span aria-hidden="true">↗</span></button>
+      <span class="intro-caption">Начни с Сокольников. Продолжи по всей Москве.</span>
+    </div>
+    <footer class="intro-footer"><span>Большой город. Личные истории.</span><span>9 мест · 12 демоисторий</span></footer>
+    <noscript><p class="intro-noscript">Для открытия интерактивной карты включи JavaScript в браузере.</p></noscript>
+  </main>
+  <header class="topbar" id="siteHeader" hidden inert>
+    <a class="brand" href="#" aria-label="ДВОР, на главную"><img src="assets/mark.svg" alt=""><span>Двор<span class="brand-dot">.</span></span></a>
+    <div class="brand-caption">Личные истории<br>на карте города</div>
+    <nav class="main-nav" aria-label="Основная навигация">
+      <button class="nav-link active" data-nav="map">Исследовать</button>
+      <button class="nav-link" data-nav="routes">Прогулки <span id="navRouteCount" class="small-counter">0</span></button>
+      <button class="nav-link" data-nav="about">О проекте <span class="north-arrow">↗</span></button>
+    </nav>
+    <div class="city-status"><span class="live-dot"></span> Москва</div>
+    <button class="header-collection" id="headerCollection">Первая коллекция <span>Сокольники ↗</span></button>
+  </header>
+
+  <main class="workspace" id="mapWorkspace" tabindex="-1" aria-label="Карта и истории Москвы" hidden inert>
+    <div id="map" role="region" aria-label="Интерактивная карта воспоминаний Москвы"></div>
+
+    <div class="map-title" aria-hidden="true"><span>Карта воспоминаний</span><b>Москва</b></div>
+    <div class="map-toolbar">
+      <button id="moscowButton" class="floating-button">Вся Москва <span>↗</span></button>
+      <button id="sokolnikiButton" class="floating-button">Сокольники <span class="live-dot"></span></button>
+      <button id="nearbyButton" class="floating-button icon-button" aria-label="Найти истории рядом со мной" title="Рядом со мной"><span data-icon="locate"></span></button>
+    </div>
+    <div class="map-controls">
+      <button id="zoomIn" aria-label="Приблизить карту">+</button>
+      <button id="zoomOut" aria-label="Отдалить карту">−</button>
+      <div class="control-divider"></div>
+      <button id="resetView" aria-label="Вернуться в Сокольники" title="Вернуться в Сокольники"><span data-icon="compass"></span></button>
+    </div>
+    <div class="map-coordinate" id="mapCoordinate">55.7951° N &nbsp; 37.6740° E</div>
+    <div class="map-legend"><i></i><span>Место с историей</span><span class="legend-divider"></span><b>2</b><span>Несколько голосов</span></div>
+    <div class="map-error" id="mapError" hidden>Не удалось загрузить карту. Проверь соединение. <button id="retryTiles">Повторить ↗</button></div>
+
+    <aside class="explorer" id="explorer" aria-label="Поиск и список историй">
+      <button class="mobile-handle" id="mobileExpand" aria-label="Развернуть список историй"><span></span></button>
+      <div class="explorer-intro">
+        <div class="eyebrow">Места становятся историями</div>
+        <h1>Твоя Москва.<br>Чьи-то истории<span class="amber-dot">.</span></h1>
+        <p>Знакомые места. Незнакомые истории.<br>Найди то, что хочется услышать.</p>
+        <div class="intro-stats"><span><b>12</b> историй</span><span><b>9</b> мест</span><span class="demo-tag">Демо</span></div>
+      </div>
+      <div class="explorer-filters">
+        <label class="search"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="Место, история или имя" aria-label="Поиск по историям"><kbd>/</kbd></label>
+        <div class="filter-chips" id="themeFilters" role="group" aria-label="Темы историй"></div>
+        <div class="list-toolbar"><label class="district-select"><span data-icon="pin"></span><select id="districtSelect" aria-label="Выбрать район"><option value="all">Все районы</option></select><span class="select-chevron">⌄</span></label><span id="resultsCount">12 историй</span></div>
+      </div>
+      <div class="story-list" id="storyList"></div>
+      <div class="explorer-footer"><span class="live-dot"></span> Первая коллекция <button id="pilotRoute">Прогулка по району <span>↗</span></button></div>
+    </aside>
+
+    <section class="route-dock" id="routeDock" aria-label="Ваша прогулка">
+      <div class="dock-icon"><span data-icon="route"></span></div>
+      <div class="dock-copy"><b id="dockTitle">Собери город в прогулку</b><span id="dockSubtitle">Выбирай истории и отправляйся слушать город</span></div>
+      <div class="dock-avatars" id="dockAvatars"></div>
+      <button class="button dark" id="openRoute">Собрать прогулку <span>↗</span></button>
+    </section>
+    <button class="mobile-list-button" id="mobileListButton"><span data-icon="list"></span> Истории <span>12</span></button>
+
+    <aside class="detail-panel" id="detailPanel" hidden aria-label="Карточка истории"></aside>
+    <aside class="route-panel" id="routePanel" hidden aria-label="Конструктор прогулки"></aside>
+  </main>
+
+  <dialog id="aboutDialog" class="modal about-modal">
+    <button class="close-modal icon-button" aria-label="Закрыть"><span data-icon="close"></span></button>
+    <div class="eyebrow">ДВОР / О ПРОЕКТЕ</div>
+    <h2>Большой город.<br>Личные истории<span class="amber-dot">.</span></h2>
+    <p>Мы помним города через людей. Лавочку, на которой познакомились. Двор, где научились кататься на велосипеде. Дорогу, по которой ходили в школу.</p>
+    <p>ДВОР собирает эти воспоминания на карте. Одно место, один человек, один эпизод — и город становится ближе.</p>
+    <div class="about-steps"><div><b>01</b><span>Найди место<br>на карте</span></div><div><b>02</b><span>Послушай<br>чью-то историю</span></div><div><b>03</b><span>Собери свою<br>прогулку</span></div></div>
+    <div class="demo-notice"><span data-icon="info"></span><p>Это работающий прототип. Места на карте реальные; рассказы, имена и иллюстрированные ролики созданы для демонстрации. Озвучка синтетическая. Реальные интервью появятся после записи и согласования с рассказчиками.</p></div>
+    <button class="button dark" id="aboutExplore">Открыть карту <span>↗</span></button>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="assets/leaflet.js"></script>
+  <script src="data.js"></script>
+  <script src="photos.js?v=2"></script>
+  <script src="app.js?v=3"></script>
+</body>
+</html>
