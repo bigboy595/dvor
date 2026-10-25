@@ -6,16 +6,12 @@
   const paths = {
     search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
     pin:'<path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
-    headphones:'<path d="M4 13v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="12" width="4" height="8" rx="2"/><rect x="17" y="12" width="4" height="8" rx="2"/>',
     route:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M8 5h9a4 4 0 0 1 0 8H7a3 3 0 0 0 0 6h9"/>',
     locate:'<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>',
     compass:'<circle cx="12" cy="12" r="9"/><path d="m16 8-3 5-5 3 3-5Z"/>',
     close:'<path d="m6 6 12 12M18 6 6 18"/>',
     arrow:'<path d="M19 12H5m6-6-6 6 6 6"/>',
-    play:'<path d="m8 4 12 8-12 8Z"/>',
-    pause:'<path d="M8 5v14M16 5v14"/>',
     text:'<path d="M4 5h16M4 10h16M4 15h11M4 20h8"/>',
-    video:'<rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 9 5-3v12l-5-3"/>',
     bookmark:'<path d="M6 3h12v18l-6-4-6 4Z"/>',
     share:'<path d="M12 15V3m-4 4 4-4 4 4M5 12v8h14v-8"/>',
     info:'<circle cx="12" cy="12" r="9"/><path d="M12 10v7M12 6v1"/>',
@@ -44,11 +40,11 @@
   const photoByPlace = id => window.DVOR_PHOTOS?.[id];
   const sanitizeIds = ids => [...new Set(Array.isArray(ids) ? ids : [])].filter(id => storyById(id));
   const state = {
-    query:'',theme:'Все',district:'all',active:null,media:'text',nearby:null,
+    query:'',theme:'Все',district:'all',active:null,nearby:null,
     route:sanitizeIds(readStore('dvor.route.v1', [])),
     bookmarks:sanitizeIds(readStore('dvor.bookmarks.v1', [])),
     saved:readStore('dvor.saved.v1', []),
-    routeInfo:null,walking:false,walkIndex:0,audioId:null,audioStatus:'idle',audioSpeed:1
+    routeInfo:null,walking:false,walkIndex:0
   };
   if (!Array.isArray(state.saved)) state.saved = [];
   state.saved = state.saved.filter(r => r && Array.isArray(r.ids)).map(r => ({...r,ids:sanitizeIds(r.ids)})).filter(r => r.ids.length);
@@ -57,7 +53,6 @@
   let map, baseLayer, userMarker, routeLayer, routeLabel, toastTimer, routeController, routeToken = 0;
   const markerGroup = L.layerGroup(), markers = new Map(), routeCache = new Map();
   const motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const formatTime = seconds => `${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;
   const plural = (n, forms) => forms[n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 1 : 2];
   const storyCount = n => `${n} ${plural(n,['история','истории','историй'])}`;
   const placeCount = n => `${n} ${plural(n,['место','места','мест'])}`;
@@ -80,9 +75,9 @@
   function initMap() {
     map = L.map('map',{zoomControl:false,attributionControl:true,minZoom:9,maxZoom:19,preferCanvas:true,zoomSnap:1}).setView([55.795,37.674],14);
     map.attributionControl.setPrefix('');
-    baseLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',{
       maxZoom:19,
-      attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+      attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · <a href="https://www.openstreetmap.fr/" target="_blank" rel="noopener">OSM France</a>',
       updateWhenIdle:true,keepBuffer:2
     }).addTo(map);
     let errors=0,loaded=0;
@@ -131,7 +126,7 @@
     });
   }
   function renderThemes() {
-    const themes=['Все','Детство','Встречи','Работа','Перемены','Сохранённые'];
+    const themes=['Все',...new Set(stories.map(s=>s.theme)),'Сохранённые'];
     $('themeFilters').innerHTML=themes.map(t=>`<button class="chip${state.theme===t?' active':''}" data-theme="${t}" aria-pressed="${state.theme===t}">${t==='Сохранённые'?icon('bookmark'):''}${t==='Сохранённые'?'Мои':t}</button>`).join('');
   }
   function renderList() {
@@ -139,7 +134,7 @@
     renderThemes();renderMarkers();
     $('storyList').innerHTML=result.length?result.map(s=>{
       const p=placeById(s.place),added=state.route.includes(s.id),photo=photoByPlace(p.id);
-      return `<article class="story-card${state.active===s.id?' selected':''}"><button class="story-card-main" data-story="${s.id}" aria-label="Открыть историю ${esc(s.title)}"><div class="story-thumbnail${photo?'':' no-photo'}" style="--thumb:${s.color}">${photo?`<img src="${photo.src}" alt="${esc(p.name)} — ${p.id==='khlebo'?'схема места':'фотография места'}" loading="lazy" decoding="async">`:glyph(p.icon)}<span class="thumbnail-index">${esc(s.period)}</span><span class="thumbnail-voice">${icon('headphones')} ${formatTime(s.duration)}</span></div><div class="story-copy"><div class="story-place">${esc(p.district)} · ${esc(p.name)}</div><h3>${esc(s.title)}</h3><div class="story-meta"><span>${esc(s.name)}</span><span>·</span><span>${esc(s.theme)}</span></div></div></button><button class="card-add${added?' added':''}" data-add="${s.id}" aria-label="${added?'Убрать из прогулки':'Добавить в прогулку'}: ${esc(s.title)}" aria-pressed="${added}">${added?'✓':'+'}</button></article>`;
+      return `<article class="story-card${state.active===s.id?' selected':''}"><button class="story-card-main" data-story="${s.id}" aria-label="Открыть историю ${esc(s.title)}"><div class="story-thumbnail${photo?'':' no-photo'}" style="--thumb:${s.color}">${photo?`<img src="${photo.src}" alt="${esc(photo.caption||p.name)} — фотография места" loading="lazy" decoding="async">`:glyph(p.icon)}<span class="thumbnail-index">${esc(s.period)}</span><span class="thumbnail-voice">${icon('text')} Чтение · ${s.readingMinutes} мин</span></div><div class="story-copy"><div class="story-place">${esc(p.district)} · ${esc(p.name)}</div><h3>${esc(s.title)}</h3><div class="story-meta"><span>${esc(s.name)}</span><span>·</span><span>${esc(s.theme)}</span></div></div></button><button class="card-add${added?' added':''}" data-add="${s.id}" aria-label="${added?'Убрать из прогулки':'Добавить в прогулку'}: ${esc(s.title)}" aria-pressed="${added}">${added?'✓':'+'}</button></article>`;
     }).join(''):`<div class="empty-state">${icon('search')}<b>${state.theme==='Сохранённые'?'Здесь будут твои истории':'Пока ничего не нашлось'}</b>${state.theme==='Сохранённые'?'Сохраняй истории значком закладки в карточке.':state.nearby?'В радиусе двух километров пока нет историй.':'Попробуй другую тему, район или название.'}<br><button data-reset>Показать все истории ↗</button></div>`;
     $('nearbyButton').classList.toggle('selected',!!state.nearby);
     $('sokolnikiButton').classList.toggle('selected',state.district==='Сокольники');
@@ -154,50 +149,32 @@
   }
   function openStory(id,fly=true){
     if(!storyById(id))return;
-    stopAudio();state.walking=false;state.active=id;state.media='text';$('routePanel').hidden=true;$('detailPanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');map.invalidateSize();setNav('map');
+    state.walking=false;state.active=id;$('routePanel').hidden=true;$('detailPanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');map.invalidateSize();setNav('map');
     $('explorer').classList.remove('expanded');renderDetail();renderList();if(fly)flyToPlace(placeById(storyById(id).place));
     $('detailPanel').scrollTop=0;
   }
-  function closeDetail(){if($('detailPanel').hidden)return;stopAudio();$('detailPanel').hidden=true;state.active=null;if($('routePanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');map.invalidateSize();renderList();}
+  function closeDetail(){if($('detailPanel').hidden)return;$('detailPanel').hidden=true;state.active=null;if($('routePanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');map.invalidateSize();renderList();}
+  function photoFigure(p){
+    const photo=photoByPlace(p.id);if(!photo)return '';
+    return `<figure class="story-photo"><img src="${esc(photo.src)}" alt="${esc(photo.caption||p.name)}" loading="lazy" decoding="async"><figcaption><span>${esc(photo.caption||p.name)}</span><small><a href="${esc(photo.source)}" target="_blank" rel="noopener">${esc(photo.artist)} ↗</a> · <a href="${esc(photo.licenseUrl||photo.source)}" target="_blank" rel="noopener">${esc(photo.license)}</a> · Размер адаптирован.</small></figcaption></figure>`;
+  }
+  function storyHTML(s){
+    const p=placeById(s.place);
+    return `<div class="story-text">${s.text.map((t,i)=>`<p>${esc(t)}</p>${i===1?photoFigure(p):''}`).join('')}</div>`;
+  }
   function renderDetail(){
-    const s=storyById(state.active);if(!s)return;const p=placeById(s.place),added=state.route.includes(s.id),saved=state.bookmarks.includes(s.id),photo=photoByPlace(p.id);
+    const s=storyById(state.active);if(!s)return;const p=placeById(s.place),added=state.route.includes(s.id),saved=state.bookmarks.includes(s.id);
     const other=stories.filter(x=>x.place===p.id&&x.id!==s.id);
     $('detailPanel').innerHTML=`<div class="panel-top"><button class="panel-back" data-close-detail>${icon('arrow')} К историям</button><button class="panel-close" data-close-detail aria-label="Закрыть историю">${icon('close')}</button></div>
-      <div class="detail-art${photo?' has-photo':''}" style="--art:${s.color}">${photo?`<img src="${photo.src}" alt="${esc(p.name)} — ${p.id==='khlebo'?'схема места':'фотография места'}">`:glyph(p.icon)}<span class="art-label">Двор / ${esc(p.district)}</span><span class="art-date">${esc(s.period).toUpperCase()}</span><button class="art-play" data-media="video">${icon('play')} Демо-ролик · 18 сек</button></div>
-      <div class="detail-content"><div class="detail-location">${esc(p.district)} / ${esc(p.name)}</div><h2>${esc(s.title)}</h2><div class="narrator"><div class="avatar" style="background:${s.color}">${esc(s.name[0])}</div><div class="narrator-copy"><strong>${esc(s.name)}</strong><span>${esc(s.connection)}</span></div><span class="demo-pill">ДЕМО-ИСТОРИЯ</span></div>
-      <div class="media-tabs" role="tablist" aria-label="Формат истории">${[['text','text','Текст'],['audio','headphones','Аудио'],['video','video','Видео']].map(([type,ic,label])=>`<button class="media-tab${state.media===type?' active':''}" role="tab" id="tab-${type}" aria-controls="mediaContent" aria-selected="${state.media===type}" data-media="${type}">${icon(ic)}${label}</button>`).join('')}</div>
-      <div class="media-content" id="mediaContent" role="tabpanel" aria-labelledby="tab-${state.media}">${mediaHTML(s)}</div><div class="detail-tags"><span>${esc(s.theme)}</span><span>${esc(s.period)}</span><span>${esc(p.district)}</span></div>
+      <div class="detail-content"><div class="detail-location">${esc(p.district)} / ${esc(p.name)}</div><h2>${esc(s.title)}</h2><div class="narrator"><div class="avatar" style="background:${s.color}">${esc(s.name[0])}</div><div class="narrator-copy"><strong>${esc(s.name)}</strong><span>${esc(s.connection)}</span></div></div>
+      <div class="reading-meta">${icon('text')} ${s.readingMinutes} мин чтения <span>·</span> ${esc(s.period)}</div>
+      <article class="story-article" aria-label="Текст истории: ${esc(s.title)}">${storyHTML(s)}</article><div class="detail-tags"><span>${esc(s.theme)}</span><span>${esc(s.period)}</span><span>${esc(p.district)}</span></div>
       <div class="detail-actions"><button class="button ${added?'dark':'amber'}" data-add="${s.id}">${added?'✓ В твоей прогулке':'+ Добавить в прогулку'}</button><button class="icon-button" data-bookmark="${s.id}" aria-label="${saved?'Убрать из сохранённых':'Сохранить историю'}" aria-pressed="${saved}" style="${saved?'background:#fff0c8':''}">${icon('bookmark')}</button><button class="icon-button" data-share-story="${s.id}" aria-label="Поделиться историей">${icon('share')}</button></div>
-      ${other.length?`<div class="other-stories"><h3>ЕЩЁ ОДИН ГОЛОС ЭТОГО МЕСТА</h3>${other.map(o=>`<button class="other-story-button" data-story="${o.id}"><span>${esc(o.title)}<small>${esc(o.name)} · ${esc(o.period)}</small></span><span>↗</span></button>`).join('')}</div>`:''}
-      <div class="other-stories"><h3>РЯДОМ НА КАРТЕ</h3>${places.filter(x=>x.id!==p.id).sort((a,b)=>map.distance([p.lat,p.lng],[a.lat,a.lng])-map.distance([p.lat,p.lng],[b.lat,b.lng])).slice(0,2).map(x=>`<button class="other-story-button" data-story="${stories.find(y=>y.place===x.id).id}"><span>${esc(x.name)}<small>${km(map.distance([p.lat,p.lng],[x.lat,x.lng])/1000)} км по прямой</small></span><span>↗</span></button>`).join('')}</div>${photo?`<div class="photo-credit">${p.id==='khlebo'?'Схема':'Фото'}: <a href="${esc(photo.source)}" target="_blank" rel="noopener">${esc(photo.artist)} / Wikimedia Commons ↗</a><br><a href="${esc(photo.licenseUrl || photo.source)}" target="_blank" rel="noopener">${esc(photo.license)}</a> · Размер адаптирован.<br>${esc(photo.note)}</div>`:''}</div>`;
-  }
-  function mediaHTML(s){
-    if(state.media==='audio')return `<div class="audio-player"><button class="audio-play" data-audio="${s.id}" aria-label="${state.audioId===s.id&&state.audioStatus==='playing'?'Пауза':'Послушать демоозвучку'}">${icon(state.audioId===s.id&&state.audioStatus==='playing'?'pause':'play')}</button><div class="waveform ${state.audioId===s.id&&state.audioStatus==='playing'?'playing':''}">${Array.from({length:38},(_,i)=>`<i style="--height:${8+(i*17%24)}px;--delay:${i*.03}s"></i>`).join('')}</div><span class="audio-time">~${formatTime(s.duration)}</span></div><div class="audio-tools"><span>Голос твоего браузера · русский</span><button data-speed>${state.audioSpeed}×</button></div><blockquote class="story-quote">«${esc(s.quote)}»</blockquote><p class="audio-caption">Полный текст этой истории доступен во вкладке «Текст».</p><p class="media-note"><strong>Демонстрационная озвучка.</strong> Это синтетический голос, а не запись рассказчика. Качество и доступность зависят от браузера.</p>`;
-    if(state.media==='video')return `<video class="demo-video" controls playsinline preload="metadata" aria-label="Иллюстрированный демонстрационный ролик: ${esc(s.title)}"><source src="${s.video}" type="video/mp4">Твой браузер не поддерживает видео.</video><a class="video-link" href="${s.video}" target="_blank" rel="noopener">Открыть ролик отдельно ↗</a><p class="media-note"><strong>Иллюстрированный демо-ролик, без звука.</strong> Это визуальная зарисовка для прототипа. Реальное интервью с субтитрами можно добавить после записи.</p>`;
-    return `<blockquote class="story-quote">«${esc(s.quote)}»</blockquote><div class="story-text">${s.text.map(t=>`<p>${esc(t)}</p>`).join('')}<p class="recorded">ДЕМО / ${s.recorded} · ${esc(padAddress(s))}</p></div><p class="media-note">Вымышленное воспоминание для демонстрации интерфейса. Место на карте настоящее.</p>`;
-  }
-  const padAddress = s => placeById(s.place).address;
-  let utterance = null;
-  function stopAudio(){if('speechSynthesis'in window)window.speechSynthesis.cancel();utterance=null;state.audioId=null;state.audioStatus='idle';}
-  function playAudio(id,onEnd){
-    if(!('speechSynthesis'in window)){toast('В этом браузере нет озвучки. Открой вкладку «Текст».');return;}
-    if(state.audioId===id&&state.audioStatus==='playing'){window.speechSynthesis.pause();state.audioStatus='paused';updateAudioUI();return;}
-    if(state.audioId===id&&state.audioStatus==='paused'){window.speechSynthesis.resume();state.audioStatus='playing';updateAudioUI();return;}
-    stopAudio();const s=storyById(id);if(!s)return;
-    const current=new SpeechSynthesisUtterance(`${s.title}. ${s.text.join(' ')}`);utterance=current;current.lang='ru-RU';current.rate=state.audioSpeed;
-    const voices=window.speechSynthesis.getVoices();const russian=voices.find(v=>v.lang.startsWith('ru'));if(russian)current.voice=russian;
-    current.onstart=()=>{if(utterance===current){state.audioId=id;state.audioStatus='playing';updateAudioUI();}};
-    current.onend=()=>{if(utterance===current){state.audioStatus='idle';state.audioId=null;utterance=null;updateAudioUI();if(onEnd)onEnd();}};
-    current.onerror=e=>{if(utterance===current && !['canceled','interrupted'].includes(e.error)){state.audioId=null;state.audioStatus='idle';utterance=null;updateAudioUI();toast('Озвучка недоступна. Текст истории сохранён в карточке.');}};
-    state.audioId=id;state.audioStatus='playing';updateAudioUI();window.speechSynthesis.speak(current);
-  }
-  function updateAudioUI(){
-    document.querySelectorAll('[data-audio]').forEach(el=>{const playing=state.audioId===el.dataset.audio&&state.audioStatus==='playing';el.innerHTML=icon(playing?'pause':'play');el.setAttribute('aria-label',playing?'Пауза':'Послушать демоозвучку');});
-    document.querySelectorAll('.waveform').forEach(el=>el.classList.toggle('playing',state.audioStatus==='playing'));
-    const walkButton=document.querySelector('[data-walk-audio]');if(walkButton)walkButton.innerHTML=`${state.audioStatus==='playing'?'Пауза':'Послушать историю'} ${icon(state.audioStatus==='playing'?'pause':'play')}`;
+      ${other.length?`<div class="other-stories"><h3>ЕЩЁ ОДНА ИСТОРИЯ ЭТОГО МЕСТА</h3>${other.map(o=>`<button class="other-story-button" data-story="${o.id}"><span>${esc(o.title)}<small>${esc(o.name)} · ${esc(o.period)}</small></span><span>↗</span></button>`).join('')}</div>`:''}
+      <div class="other-stories"><h3>РЯДОМ НА КАРТЕ</h3>${places.filter(x=>x.id!==p.id).sort((a,b)=>map.distance([p.lat,p.lng],[a.lat,a.lng])-map.distance([p.lat,p.lng],[b.lat,b.lng])).slice(0,2).map(x=>`<button class="other-story-button" data-story="${stories.find(y=>y.place===x.id).id}"><span>${esc(x.name)}<small>${km(map.distance([p.lat,p.lng],[x.lat,x.lng])/1000)} км по прямой</small></span><span>↗</span></button>`).join('')}</div></div>`;
   }
   function toggleRoute(id){
-    const adding=!state.route.includes(id);state.route=adding?[...state.route,id]:state.route.filter(x=>x!==id);state.walking=false;stopAudio();
+    const adding=!state.route.includes(id);state.route=adding?[...state.route,id]:state.route.filter(x=>x!==id);state.walking=false;
     persistRoute();renderList();renderDock();if(!$('detailPanel').hidden)renderDetail();if(!$('routePanel').hidden)renderRoute();updateRouteGeometry();
     toast(adding?'История добавлена в твою прогулку':'История убрана из прогулки');
   }
@@ -205,28 +182,28 @@
   function renderDock(){
     $('navRouteCount').textContent=state.route.length;const points=routePlaces();
     $('dockTitle').textContent=state.route.length?`${storyCount(state.route.length)} в твоей прогулке`:'Собери город в прогулку';
-    $('dockSubtitle').textContent=state.route.length?`${placeCount(points.length)} · ${state.routeInfo?.status==='ready'?`${km(state.routeInfo.length)} км пешком`:'добавляй и меняй порядок'}`:'Выбирай истории и отправляйся слушать город';
+    $('dockSubtitle').textContent=state.route.length?`${placeCount(points.length)} · ${state.routeInfo?.status==='ready'?`${km(state.routeInfo.length)} км пешком`:'добавляй и меняй порядок'}`:'Выбирай истории и открывай город';
     $('openRoute').innerHTML=state.route.length?'Моя прогулка <span>↗</span>':'Собрать прогулку <span>↗</span>';
     $('dockAvatars').innerHTML=state.route.slice(0,3).map(id=>{const s=storyById(id);return `<span style="background:${s.color}">${esc(s.name[0])}</span>`;}).join('');
   }
   function openRoute(){closeDetail();$('routePanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');map.invalidateSize();setNav('routes');renderRoute();if(routePlaces().length>1)fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));updateRouteGeometry();}
-  function closeRoute(){if($('routePanel').hidden)return;$('routePanel').hidden=true;if($('detailPanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');map.invalidateSize();setNav('map');if(state.walking){state.walking=false;stopAudio();}}
+  function closeRoute(){if($('routePanel').hidden)return;$('routePanel').hidden=true;if($('detailPanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');map.invalidateSize();setNav('map');if(state.walking){state.walking=false;}}
   function renderRoute(){
-    const points=routePlaces(),seconds=state.route.reduce((n,id)=>n+storyById(id).duration,0);
+    const points=routePlaces(),seconds=state.route.reduce((n,id)=>n+storyById(id).readingMinutes*60,0);
     const info=state.routeInfo;
     $('routePanel').innerHTML=`<div class="panel-top"><button class="panel-back" data-close-route>${icon('arrow')} На карту</button><button class="panel-close" data-close-route aria-label="Закрыть прогулку">${icon('close')}</button></div>
-    <div class="route-header"><div class="eyebrow">ДВОР / ЛИЧНЫЙ МАРШРУТ</div><h2>Москва твоими<br>шагами<span class="amber-dot">.</span></h2><p>${state.route.length?'Твой маршрут из голосов города. Порядок можно менять стрелками у каждой истории.':'Выбери истории на карте — или начни с нашей первой прогулки по Сокольникам.'}</p></div>
-    ${state.route.length?`<div class="route-summary"><div><b>${points.length}</b>МЕСТА</div><div><b>${info?.status==='ready'?km(info.length):'—'} <small>км</small></b>ПЕШКОМ</div><div><b>${info?.status==='ready'?Math.ceil((info.time+seconds)/60):Math.ceil(seconds/60)} <small>мин</small></b>${info?.status==='ready'?'С ПРОСЛУШИВАНИЕМ':'ТОЛЬКО АУДИО'}</div></div>
-    <div class="route-status">${info?.status==='ready'?'Пеший маршрут по дорожкам и улицам. Время включает демонстрационную озвучку.':info?.status==='loading'?'Ищем пешеходные дорожки…':points.length<2?'Одна точка: открой её в навигаторе или добавь ещё одну.':'Показан порядок мест, соединённых пунктиром. Для пешего пути открой навигацию.'}</div>
-    ${state.walking?walkingHTML():''}<div class="route-stops">${state.route.map((id,i)=>{const s=storyById(id),p=placeById(s.place),number=points.findIndex(x=>x.id===p.id)+1;return `<div class="route-stop"><span class="stop-number">${number}</span><div class="stop-content"><button data-story="${id}">${esc(s.title)}</button><p>${esc(p.name)}<br>${esc(s.name)} · ~${formatTime(s.duration)}</p></div><div class="stop-tools"><button data-move="${id}" data-direction="-1" ${i===0?'disabled':''} aria-label="Переместить историю выше">↑</button><button data-move="${id}" data-direction="1" ${i===state.route.length-1?'disabled':''} aria-label="Переместить историю ниже">↓</button><button data-add="${id}" aria-label="Убрать историю из прогулки">×</button></div></div>`;}).join('')}</div>
-    <div class="route-bottom"><button class="button dark" data-start-walk>${state.walking?'Завершить прогулку':'Начать прогулку'} ${icon('headphones')}</button><a class="button amber" href="${navigationURL()}" target="_blank" rel="noopener">Открыть пешую навигацию ↗</a><div class="two-buttons"><button class="button secondary" data-save-route>Сохранить ${icon('bookmark')}</button><button class="button secondary" data-share-route>Ссылка ${icon('share')}</button></div><div class="two-buttons"><button class="button secondary" data-export-route>Скачать GPX ${icon('download')}</button></div><p class="route-saved-note">Выбранные истории сохранены ${storageAvailable?'в этом браузере.':'только до закрытия страницы — хранилище недоступно.'}</p><button class="route-clear" data-clear-route>Очистить прогулку</button>${savedHTML()}</div>`:
-    `<div class="route-empty"><div class="pilot-card"><div class="eyebrow">ПЕРВАЯ ПРОГУЛКА / СОКОЛЬНИКИ</div><h3>От первого велосипеда<br>до случайного танца</h3><p>3 места · 6 голосов<br>Главный вход → фонтан → аллея у ротонды</p><button class="button dark" data-pilot>Выбрать эти истории ↗</button></div>${savedHTML()}</div>`}`;
+    <div class="route-header"><div class="eyebrow">ДВОР / ЛИЧНЫЙ МАРШРУТ</div><h2>Москва твоими<br>шагами<span class="amber-dot">.</span></h2><p>${state.route.length?'Твой маршрут из личных историй. Порядок можно менять стрелками у каждой истории.':'Выбери истории на карте — или начни с нашей первой прогулки по Сокольникам.'}</p></div>
+    ${state.route.length?`<div class="route-summary"><div><b>${points.length}</b>МЕСТА</div><div><b>${info?.status==='ready'?km(info.length):'—'} <small>км</small></b>ПЕШКОМ</div><div><b>${info?.status==='ready'?Math.ceil((info.time+seconds)/60):Math.ceil(seconds/60)} <small>мин</small></b>${info?.status==='ready'?'С ЧТЕНИЕМ':'НА ЧТЕНИЕ'}</div></div>
+    <div class="route-status">${info?.status==='ready'?'Пеший маршрут по дорожкам и улицам. Время включает примерные остановки на чтение.':info?.status==='loading'?'Ищем пешеходные дорожки…':points.length<2?'Одна точка: открой её в навигаторе или добавь ещё одну.':'Показан порядок мест, соединённых пунктиром. Для пешего пути открой навигацию.'}</div>
+    ${state.walking?walkingHTML():''}<div class="route-stops">${state.route.map((id,i)=>{const s=storyById(id),p=placeById(s.place),number=points.findIndex(x=>x.id===p.id)+1;return `<div class="route-stop"><span class="stop-number">${number}</span><div class="stop-content"><button data-story="${id}">${esc(s.title)}</button><p>${esc(p.name)}<br>${esc(s.name)} · ~${s.readingMinutes} мин чтения</p></div><div class="stop-tools"><button data-move="${id}" data-direction="-1" ${i===0?'disabled':''} aria-label="Переместить историю выше">↑</button><button data-move="${id}" data-direction="1" ${i===state.route.length-1?'disabled':''} aria-label="Переместить историю ниже">↓</button><button data-add="${id}" aria-label="Убрать историю из прогулки">×</button></div></div>`;}).join('')}</div>
+    <div class="route-bottom"><button class="button dark" data-start-walk>${state.walking?'Завершить прогулку':'Начать прогулку'} ${icon('route')}</button><a class="button amber" href="${navigationURL()}" target="_blank" rel="noopener">Открыть пешую навигацию ↗</a><div class="two-buttons"><button class="button secondary" data-save-route>Сохранить ${icon('bookmark')}</button><button class="button secondary" data-share-route>Ссылка ${icon('share')}</button></div><div class="two-buttons"><button class="button secondary" data-export-route>Скачать GPX ${icon('download')}</button></div><p class="route-saved-note">Выбранные истории сохранены ${storageAvailable?'в этом браузере.':'только до закрытия страницы — хранилище недоступно.'}</p><button class="route-clear" data-clear-route>Очистить прогулку</button>${savedHTML()}</div>`:
+    `<div class="route-empty"><div class="pilot-card"><div class="eyebrow">ПЕРВАЯ ПРОГУЛКА / СОКОЛЬНИКИ</div><h3>Три места.<br>Шесть личных историй</h3><p>3 места · 6 историй<br>Главный вход → фонтан → аллея у ротонды</p><button class="button dark" data-pilot>Выбрать эти истории ↗</button></div>${savedHTML()}</div>`}`;
   }
   function savedHTML(){return state.saved.length?`<div class="other-stories"><h3>СОХРАНЁННЫЕ ПРОГУЛКИ</h3>${state.saved.slice(0,5).map((r,i)=>`<div class="saved-route"><div>${esc(r.name)}<small>${storyCount(r.ids.length)}</small></div><button data-load-route="${i}">Открыть ↗</button></div>`).join('')}</div>`:'';}
   function walkingHTML(){
     const id=state.route[state.walkIndex],s=storyById(id),p=placeById(s.place);
     if(!s)return '';
-    return `<div class="walking-status"><div class="eyebrow">ПРОГУЛКА / ${state.walkIndex+1} ИЗ ${state.route.length}</div><h3>${esc(s.title)}</h3><p>${esc(p.name)} · ${esc(s.name)}</p><button class="button dark" data-walk-audio>Послушать историю ${icon('play')}</button><div class="two-buttons"><button class="button secondary" data-walk-step="-1" ${state.walkIndex===0?'disabled':''}>← Назад</button><button class="button secondary" data-walk-step="1">${state.walkIndex===state.route.length-1?'Завершить ✓':'Следующая →'}</button></div><p class="route-playing-note">Переходи к следующей истории, когда дойдёшь до места. Автопереход по геопозиции пока не включён.</p></div>`;
+    return `<div class="walking-status"><div class="eyebrow">ПРОГУЛКА / ${state.walkIndex+1} ИЗ ${state.route.length}</div><h3>${esc(s.title)}</h3><p>${esc(p.name)} · ${esc(s.name)}</p><details class="walk-reading"><summary>Читать историю <span>↗</span></summary>${storyHTML(s)}</details><div class="two-buttons"><button class="button secondary" data-walk-step="-1" ${state.walkIndex===0?'disabled':''}>← Назад</button><button class="button secondary" data-walk-step="1">${state.walkIndex===state.route.length-1?'Завершить ✓':'Следующая →'}</button></div><p class="route-playing-note">Переходи к следующей истории, когда дойдёшь до места. Автопереход по геопозиции пока не включён.</p></div>`;
   }
   function navigationURL(){const points=routePlaces();return `https://yandex.ru/maps/?mode=routes&rtt=pd&rtext=${points.map(p=>`${p.lat},${p.lng}`).join('~')}`;}
   async function updateRouteGeometry(){
@@ -254,8 +231,8 @@
     function applyRoute(info){state.routeInfo=info;if(routeLayer)map.removeLayer(routeLayer);routeLayer=L.polyline(info.coords,{color:'#9e7935',weight:4,opacity:.9,interactive:false}).addTo(map);renderDock();if(!$('routePanel').hidden)renderRoute();}
   }
   function decodePolyline(str){let index=0,lat=0,lng=0,result=[];while(index<str.length){let shift=0,value=0,byte;do{byte=str.charCodeAt(index++)-63;value|=(byte&31)<<shift;shift+=5;}while(byte>=32);lat+=(value&1)?~(value>>1):(value>>1);shift=0;value=0;do{byte=str.charCodeAt(index++)-63;value|=(byte&31)<<shift;shift+=5;}while(byte>=32);lng+=(value&1)?~(value>>1):(value>>1);result.push([lat/1e6,lng/1e6]);}return result;}
-  function pilotRoute(){state.route=stories.filter(s=>placeById(s.place).district==='Сокольники').map(s=>s.id);state.walking=false;stopAudio();persistRoute();renderList();renderDock();openRoute();toast('Шесть историй Сокольников — в твоей прогулке');}
-  function moveStory(id,direction){const index=state.route.indexOf(id),next=index+direction;if(next<0||next>=state.route.length)return;[state.route[index],state.route[next]]=[state.route[next],state.route[index]];state.walking=false;stopAudio();persistRoute();renderList();renderDock();renderRoute();updateRouteGeometry();}
+  function pilotRoute(){state.route=places.filter(p=>p.district==='Сокольники').flatMap(p=>stories.filter(s=>s.place===p.id).map(s=>s.id));state.walking=false;persistRoute();renderList();renderDock();openRoute();toast('Шесть историй Сокольников — в твоей прогулке');}
+  function moveStory(id,direction){const index=state.route.indexOf(id),next=index+direction;if(next<0||next>=state.route.length)return;[state.route[index],state.route[next]]=[state.route[next],state.route[index]];state.walking=false;persistRoute();renderList();renderDock();renderRoute();updateRouteGeometry();}
   function download(name,content,type='text/plain;charset=utf-8'){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
   function exportRoute(){
     const points=routePlaces(),xmlEscape=v=>String(v).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
@@ -289,21 +266,17 @@
       else if(target.hasAttribute('data-close-detail'))closeDetail();
       else if(target.hasAttribute('data-close-route'))closeRoute();
       else if(target.hasAttribute('data-reset'))resetFilters();
-      else if(target.hasAttribute('data-media')){stopAudio();state.media=target.dataset.media;renderDetail();}
       else if(target.hasAttribute('data-bookmark')){const id=target.dataset.bookmark;state.bookmarks=state.bookmarks.includes(id)?state.bookmarks.filter(x=>x!==id):[...state.bookmarks,id];writeStore('dvor.bookmarks.v1',state.bookmarks);renderDetail();renderList();toast(state.bookmarks.includes(id)?'История сохранена. Найдёшь её в фильтре «Мои».':'История удалена из сохранённых');}
-      else if(target.hasAttribute('data-audio'))playAudio(target.dataset.audio);
-      else if(target.hasAttribute('data-speed')){state.audioSpeed=state.audioSpeed===1?1.25:state.audioSpeed===1.25?1.5:1;stopAudio();renderDetail();}
       else if(target.hasAttribute('data-share-story')){const u=new URL(location.href);u.search='';u.searchParams.set('story',target.dataset.shareStory);shareURL(u.href);}
       else if(target.hasAttribute('data-pilot'))pilotRoute();
       else if(target.hasAttribute('data-move'))moveStory(target.dataset.move,Number(target.dataset.direction));
-      else if(target.hasAttribute('data-clear-route')){state.route=[];state.walking=false;stopAudio();persistRoute();renderList();renderDock();renderRoute();updateRouteGeometry();}
+      else if(target.hasAttribute('data-clear-route')){state.route=[];state.walking=false;persistRoute();renderList();renderDock();renderRoute();updateRouteGeometry();}
       else if(target.hasAttribute('data-save-route')){const points=routePlaces();const entry={name:points.length&&points.every(p=>p.district===points[0].district)?`Прогулка / ${points[0].district}`:'Моя Москва',ids:[...state.route],date:new Date().toISOString()};state.saved=[entry,...state.saved.filter(r=>r.ids.join(',')!==entry.ids.join(','))].slice(0,5);const ok=writeStore('dvor.saved.v1',state.saved);renderRoute();toast(ok?'Прогулка сохранена в этом браузере':'Хранилище недоступно. Сохрани прогулку ссылкой или GPX.');}
-      else if(target.hasAttribute('data-load-route')){const saved=state.saved[Number(target.dataset.loadRoute)];if(!saved)return;state.route=sanitizeIds(saved.ids);state.walking=false;stopAudio();persistRoute();renderList();renderDock();renderRoute();updateRouteGeometry();fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));}
+      else if(target.hasAttribute('data-load-route')){const saved=state.saved[Number(target.dataset.loadRoute)];if(!saved)return;state.route=sanitizeIds(saved.ids);state.walking=false;persistRoute();renderList();renderDock();renderRoute();updateRouteGeometry();fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));}
       else if(target.hasAttribute('data-share-route')){const u=new URL(location.href);u.search='';u.searchParams.set('route',state.route.join(','));shareURL(u.href);}
       else if(target.hasAttribute('data-export-route'))exportRoute();
-      else if(target.hasAttribute('data-start-walk')){stopAudio();state.walking=!state.walking;state.walkIndex=0;renderRoute();if(state.walking){flyToPlace(placeById(storyById(state.route[0]).place));$('routePanel').scrollTop=0;toast('Прогулка началась. Послушай историю в первой точке.');}}
-      else if(target.hasAttribute('data-walk-audio'))playAudio(state.route[state.walkIndex]);
-      else if(target.hasAttribute('data-walk-step')){stopAudio();const next=state.walkIndex+Number(target.dataset.walkStep);if(next>=state.route.length){state.walking=false;renderRoute();toast('Прогулка завершена. Спасибо, что послушал город.');}else{state.walkIndex=Math.max(0,next);renderRoute();flyToPlace(placeById(storyById(state.route[state.walkIndex]).place));}}
+      else if(target.hasAttribute('data-start-walk')){state.walking=!state.walking;state.walkIndex=0;renderRoute();if(state.walking){flyToPlace(placeById(storyById(state.route[0]).place));$('routePanel').scrollTop=0;toast('Прогулка началась. Открой текст истории в первой точке.');}}
+      else if(target.hasAttribute('data-walk-step')){const next=state.walkIndex+Number(target.dataset.walkStep);if(next>=state.route.length){state.walking=false;renderRoute();toast('Прогулка завершена. Спасибо, что открыл истории города.');}else{state.walkIndex=Math.max(0,next);renderRoute();flyToPlace(placeById(storyById(state.route[state.walkIndex]).place));}}
 
     });
 
@@ -323,7 +296,7 @@
     $('mapWorkspace').focus({preventScroll:true});
   }
   function showIntro(){
-    closeDetail();closeRoute();stopAudio();state.walking=false;
+    closeDetail();closeRoute();state.walking=false;
     $('siteHeader').hidden=true;$('siteHeader').inert=true;
     $('mapWorkspace').hidden=true;$('mapWorkspace').inert=true;
     $('introScreen').hidden=false;$('introScreen').inert=false;
@@ -335,6 +308,4 @@
   $('enterMap').addEventListener('click',enterMap);
   const sharedStory=new URL(location.href).searchParams.get('story');
   if(sharedStory&&storyById(sharedStory)||routeParam&&state.route.length)enterMap();
-  if('speechSynthesis'in window)window.speechSynthesis.getVoices();
-  window.addEventListener('pagehide',stopAudio);
 })();

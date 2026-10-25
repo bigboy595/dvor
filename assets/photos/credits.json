@@ -6,7 +6,8 @@
     "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
     "source": "https://commons.wikimedia.org/wiki/File:The_entrance_to_Sokolniki_Park.jpg",
     "title": "The entrance to Sokolniki Park.jpg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
+    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода.",
+    "caption": "Главный вход в парк «Сокольники»"
   },
   "fountain": {
     "src": "assets/photos/fountain.webp",
@@ -15,16 +16,18 @@
     "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
     "source": "https://commons.wikimedia.org/wiki/File:%D0%A4%D0%BE%D0%BD%D1%82%D0%B0%D0%BD_%D0%BF%D0%B0%D1%80%D0%BA%D0%B0_%C2%AB%D0%A1%D0%BE%D0%BA%D0%BE%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%B8%C2%BB_2.jpg",
     "title": "Фонтан парка «Сокольники» 2.jpg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
+    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода.",
+    "caption": "Фонтанная площадь, парк «Сокольники»"
   },
   "rotonda": {
-    "src": "assets/photos/rotonda.webp",
-    "artist": "Alexander Baranov from Montpellier, France",
-    "license": "CC BY 2.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
-    "source": "https://commons.wikimedia.org/wiki/File:File_by_Alexander_Baranov_-_Sep_%2711_Sokolniki_Park_-0_(6250814905).jpg",
-    "title": "File by Alexander Baranov - Sep '11 Sokolniki Park -0 (6250814905).jpg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
+    "src": "assets/photos/alley.webp",
+    "artist": "Leokand",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "source": "https://commons.wikimedia.org/wiki/File:1-%D0%B9_%D0%9B%D1%83%D1%87%D0%B5%D0%B2%D0%BE%D0%B9_%D0%BF%D1%80%D0%BE%D1%81%D0%B5%D0%BA.jpg",
+    "title": "1-й Лучевой просек.jpg",
+    "caption": "1-й Лучевой просек, парк «Сокольники»",
+    "note": "Аллея парка «Сокольники». Фотография окрестностей, не снимок описанных событий."
   },
   "chistye": {
     "src": "assets/photos/chistye.webp",
@@ -33,42 +36,6 @@
     "licenseUrl": "",
     "source": "https://commons.wikimedia.org/wiki/File:Chistye_prudy.jpeg",
     "title": "Chistye prudy.jpeg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
-  },
-  "arbat": {
-    "src": "assets/photos/arbat.webp",
-    "artist": "Valeri Pizhanski from Odintsovo, Russia",
-    "license": "CC BY-SA 2.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
-    "source": "https://commons.wikimedia.org/wiki/File:Arbat_(30345368283).jpg",
-    "title": "Arbat (30345368283).jpg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
-  },
-  "patriarch": {
-    "src": "assets/photos/patriarch.webp",
-    "artist": "Shuvaev",
-    "license": "CC BY-SA 4.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-    "source": "https://commons.wikimedia.org/wiki/File:Patriarshiye_Ponds_Pavilion_June_2019_01.jpg",
-    "title": "Patriarshiye Ponds Pavilion June 2019 01.jpg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
-  },
-  "khlebo": {
-    "src": "assets/photos/khlebo.webp",
-    "artist": "Пресс-служба Правительства Москвы",
-    "license": "CC BY 4.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
-    "source": "https://commons.wikimedia.org/wiki/File:Khlebzavod_9_project.jpg",
-    "title": "Khlebzavod 9 project.jpg",
-    "note": "Схема территории Хлебозавода, не иллюстрация описанного эпизода."
-  },
-  "neskuchny": {
-    "src": "assets/photos/neskuchny.webp",
-    "artist": "JukoFF",
-    "license": "CC BY-SA 4.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-    "source": "https://commons.wikimedia.org/wiki/File:Neskuchny_Garden_2016_Moscow.JPG",
-    "title": "Neskuchny Garden 2016 Moscow.JPG",
     "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
   }
 }
