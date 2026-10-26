@@ -50,8 +50,8 @@
   state.saved = state.saved.filter(r => r && Array.isArray(r.ids)).map(r => ({...r,ids:sanitizeIds(r.ids)})).filter(r => r.ids.length);
   const routeParam = new URL(location.href).searchParams.get('route');
   if (routeParam) state.route = sanitizeIds(routeParam.split(','));
-  let map, baseLayer, userMarker, routeLayer, routeLabel, toastTimer, routeController, routeToken = 0;
-  const markerGroup = L.layerGroup(), markers = new Map(), routeCache = new Map();
+  let map, userMarker, routeLayer, routeLabel, toastTimer, routeController, mapLoadTimer, mapSDKPromise, mapLoading=false, appStarted=false, routeToken = 0;
+  const markers = new Map(), routeCache = new Map();
   const motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   const plural = (n, forms) => forms[n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 1 : 2];
   const storyCount = n => `${n} ${plural(n,['история','истории','историй'])}`;
@@ -67,44 +67,59 @@
       return (state.theme === 'Все' || state.theme === 'Сохранённые' && state.bookmarks.includes(s.id) || s.theme === state.theme)
         && (state.district === 'all' || p.district === state.district)
         && (!query || [s.title,s.name,s.theme,s.period,...s.text,p.name,p.district,p.address].join(' ').toLocaleLowerCase('ru').includes(query))
-        && (!state.nearby || map.distance(state.nearby, [p.lat,p.lng]) <= 2000);
+        && (!state.nearby || distance(state.nearby, [p.lat,p.lng]) <= 2000);
     });
-    if (state.nearby) result.sort((a,b) => {const pa=placeById(a.place),pb=placeById(b.place);return map.distance(state.nearby,[pa.lat,pa.lng])-map.distance(state.nearby,[pb.lat,pb.lng]);});
+    if (state.nearby) result.sort((a,b) => {const pa=placeById(a.place),pb=placeById(b.place);return distance(state.nearby,[pa.lat,pa.lng])-distance(state.nearby,[pb.lat,pb.lng]);});
     return result;
   }
-  function initMap() {
-    map = L.map('map',{zoomControl:false,attributionControl:true,minZoom:9,maxZoom:19,preferCanvas:true,zoomSnap:1}).setView([55.795,37.674],14);
-    map.attributionControl.setPrefix('');
-    baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',{
-      maxZoom:19,
-      attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · <a href="https://www.openstreetmap.fr/" target="_blank" rel="noopener">OSM France</a>',
-      updateWhenIdle:true,keepBuffer:2
-    }).addTo(map);
-    let errors=0,loaded=0;
-    baseLayer.on('loading',()=>{errors=0;loaded=0;});
-    baseLayer.on('tileerror',()=>{errors++;if(errors>3&&loaded===0)$('mapError').hidden=false;});
-    baseLayer.on('tileload',()=>{loaded++;$('mapError').hidden=true;});
-    baseLayer.on('load',()=>{if(errors>Math.max(3,loaded))$('mapError').hidden=false;});
-    $('retryTiles').addEventListener('click',()=>{errors=0;loaded=0;$('mapError').hidden=true;baseLayer.redraw();});
-    markerGroup.addTo(map);
-    map.on('moveend',() => {const c=map.getCenter();$('mapCoordinate').textContent=`${c.lat.toFixed(4)}° N   ${c.lng.toFixed(4)}° E`;});
-    map.on('click',() => {if(!state.walking) closeDetail();});
-    L.control.scale({position:'bottomright',imperial:false,maxWidth:85}).addTo(map);
-    // Keep the pilot area in the unobscured section of the map.
-    if(innerWidth<=760)map.panBy([0,100],{animate:false});
-    window.addEventListener('resize',() => map.invalidateSize());
-    $('zoomIn').addEventListener('click',() => map.zoomIn());
-    $('zoomOut').addEventListener('click',() => map.zoomOut());
-    $('resetView').addEventListener('click',() => focusSokolniki(false));
-    $('moscowButton').addEventListener('click',() => {resetFilters();closeDetail();closeRoute();fitCoordinates([[55.59,37.35],[55.92,37.89]]);$('moscowButton').classList.add('selected');});
-    $('sokolnikiButton').addEventListener('click',() => focusSokolniki(true));
-    $('nearbyButton').addEventListener('click',locateUser);
+  // Coordinates in the content are [latitude, longitude]; EvaMaps expects [longitude, latitude].
+  const toMap = ([lat,lng]) => [lng,lat];
+  function distance(a,b){
+    const rad=Math.PI/180,[lat1,lng1]=a,[lat2,lng2]=b;
+    const h=Math.sin((lat2-lat1)*rad/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin((lng2-lng1)*rad/2)**2;
+    return 6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
+  }
+  function loadMapSDK(){
+    if(window.EvaMaps)return Promise.resolve();
+    if(mapSDKPromise)return mapSDKPromise;
+    mapSDKPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');script.src='https://evamaps.ru/sdk/1/evamaps.js';script.async=true;
+      const timer=setTimeout(fail,15000);
+      function fail(){clearTimeout(timer);script.remove();mapSDKPromise=null;reject(new Error('Map SDK unavailable'));}
+      script.onload=()=>{clearTimeout(timer);if(window.EvaMaps)resolve();else fail();};script.onerror=fail;
+      document.head.append(script);
+    });
+    return mapSDKPromise;
+  }
+  async function startMap(){
+    if(mapLoading)return;mapLoading=true;$('map').setAttribute('aria-busy','true');$('mapError').hidden=true;
+    try{
+      await loadMapSDK();
+      if(!$('introScreen').hidden)return;
+      const center=map?.getCenter()||[37.674,55.795],zoom=map?.getZoom()||14;
+      routeController?.abort();clearTimeout(mapLoadTimer);map?.destroy();markers.clear();userMarker=null;routeLayer=null;routeLabel=null;
+      map=EvaMaps.create('map',{center,zoom,theme:'gray',minZoom:9,maxZoom:19,zoomControl:false,scaleControl:true});
+      mapLoadTimer=setTimeout(()=>{$('mapError').hidden=false;$('map').setAttribute('aria-busy','false');},20000);
+      map.on('load',()=>{clearTimeout(mapLoadTimer);$('mapError').hidden=true;$('map').setAttribute('aria-busy','false');});
+      map.on('moveend',()=>{const [lng,lat]=map.getCenter();$('mapCoordinate').textContent=`${lat.toFixed(4)}° N   ${lng.toFixed(4)}° E`;});
+      map.on('click',()=>{if(!state.walking)closeDetail();});
+      renderMarkers();
+      if(state.route.length)updateRouteGeometry();
+      if(state.active)flyToPlace(placeById(storyById(state.active).place));
+      else if(!$('routePanel').hidden&&routePlaces().length>1)fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));
+      else if(innerWidth<=760)map.panBy(0,100);
+    }catch{
+      clearTimeout(mapLoadTimer);map?.destroy();map=null;markers.clear();
+      $('mapError').hidden=false;$('map').setAttribute('aria-busy','false');
+    }finally{mapLoading=false;}
   }
   function fitCoordinates(coords) {
+    if(!map||!coords.length)return;
     const left = innerWidth > 760 ? 35 : 25;
     const right = !$('routePanel').hidden || !$('detailPanel').hidden ? innerWidth > 1020 ? 440 : innerWidth > 760 ? 360 : 25 : 55;
     const bottom = innerWidth > 760 ? 115 : 330;
-    map.fitBounds(L.latLngBounds(coords),{paddingTopLeft:[left,95],paddingBottomRight:[right,bottom],maxZoom:16,animate:motion});
+    const lats=coords.map(p=>p[0]),lngs=coords.map(p=>p[1]);
+    map.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:{left,top:95,right,bottom},maxZoom:16});
   }
   function focusSokolniki(filter) {
     closeDetail();closeRoute();
@@ -114,15 +129,16 @@
   }
   function renderMarkers() {
     const filtered = filteredStories();
-    markerGroup.clearLayers();markers.clear();
+    if(!map)return;
+    markers.forEach(marker=>marker.remove());markers.clear();
     places.forEach(p=>{
       const matching=filtered.filter(s=>s.place===p.id);if(!matching.length)return;
       const all=stories.filter(s=>s.place===p.id),routeIndex=routePlaces().findIndex(x=>x.id===p.id);
       const html=`<div class="pin-inner">${glyph(p.icon)}</div>${all.length>1?`<span class="pin-count">${all.length}</span>`:''}${routeIndex>=0?`<span class="pin-route">${routeIndex+1}</span>`:''}`;
       const active=state.active && storyById(state.active)?.place===p.id;
-      const marker=L.marker([p.lat,p.lng],{icon:L.divIcon({className:'memory-marker'+(active?' active':''),html,iconSize:[40,40],iconAnchor:[20,20]}),title:p.name,keyboard:true,riseOnHover:true});
-      marker.bindTooltip(`${esc(p.name)} · ${storyCount(all.length)}`,{direction:'top',offset:[0,-24],className:'place-tooltip'});
-      marker.on('click',()=>openStory(matching[0].id));marker.addTo(markerGroup);markers.set(p.id,marker);
+      const node=document.createElement('div');node.className='memory-marker'+(active?' active':'');node.innerHTML=html;
+      const marker=EvaMaps.marker([p.lng,p.lat],{icon:node,title:p.name,hint:`${p.name} · ${storyCount(all.length)}`,keyboard:true,riseOnHover:true});
+      marker.on('click',()=>openStory(matching[0].id));marker.addTo(map);markers.set(p.id,marker);
     });
   }
   function renderThemes() {
@@ -141,19 +157,22 @@
   }
   function resetFilters(render=true){state.query='';state.theme='Все';state.district='all';state.nearby=null;$('searchInput').value='';$('districtSelect').value='all';if(render)renderList();}
   function flyToPlace(p) {
-    const target=L.latLng(p.lat,p.lng),zoom=Math.max(map.getZoom(),15);
-    const rightPanel=innerWidth>760,offset=rightPanel?180:0;
-    const bottomOffset=innerWidth<=760?-90:15;
-    const projected=map.project(target,zoom).add([offset,bottomOffset]);
-    map.flyTo(map.unproject(projected,zoom),zoom,{animate:motion,duration:.5});
+    if(!map)return;
+    const zoom=Math.max(map.getZoom(),15),rightPanel=innerWidth>760;
+    const offset=rightPanel?180:0,bottomOffset=innerWidth<=760?-90:15;
+    // Project at the target zoom, then offset the center so the point stays outside the story panel.
+    map.setView([p.lng,p.lat],zoom);
+    const projected=map.project([p.lng,p.lat]);
+    const center=map.unproject({x:projected.x+offset,y:projected.y+bottomOffset});
+    if(motion)map.flyTo(center,zoom,{duration:350});else map.setView(center,zoom);
   }
   function openStory(id,fly=true){
     if(!storyById(id))return;
-    state.walking=false;state.active=id;$('routePanel').hidden=true;$('detailPanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');map.invalidateSize();setNav('map');
+    state.walking=false;state.active=id;$('routePanel').hidden=true;$('detailPanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');setNav('map');
     $('explorer').classList.remove('expanded');renderDetail();renderList();if(fly)flyToPlace(placeById(storyById(id).place));
     $('detailPanel').scrollTop=0;
   }
-  function closeDetail(){if($('detailPanel').hidden)return;$('detailPanel').hidden=true;state.active=null;if($('routePanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');map.invalidateSize();renderList();}
+  function closeDetail(){if($('detailPanel').hidden)return;$('detailPanel').hidden=true;state.active=null;if($('routePanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');renderList();}
   function photoFigure(p){
     const photo=photoByPlace(p.id);if(!photo)return '';
     return `<figure class="story-photo"><img src="${esc(photo.src)}" alt="${esc(photo.caption||p.name)}" loading="lazy" decoding="async"><figcaption><span>${esc(photo.caption||p.name)}</span><small><a href="${esc(photo.source)}" target="_blank" rel="noopener">${esc(photo.artist)} ↗</a> · <a href="${esc(photo.licenseUrl||photo.source)}" target="_blank" rel="noopener">${esc(photo.license)}</a> · Размер адаптирован.</small></figcaption></figure>`;
@@ -171,7 +190,7 @@
       <article class="story-article" aria-label="Текст истории: ${esc(s.title)}">${storyHTML(s)}</article><div class="detail-tags"><span>${esc(s.theme)}</span><span>${esc(s.period)}</span><span>${esc(p.district)}</span></div>
       <div class="detail-actions"><button class="button ${added?'dark':'amber'}" data-add="${s.id}">${added?'✓ В твоей прогулке':'+ Добавить в прогулку'}</button><button class="icon-button" data-bookmark="${s.id}" aria-label="${saved?'Убрать из сохранённых':'Сохранить историю'}" aria-pressed="${saved}" style="${saved?'background:#fff0c8':''}">${icon('bookmark')}</button><button class="icon-button" data-share-story="${s.id}" aria-label="Поделиться историей">${icon('share')}</button></div>
       ${other.length?`<div class="other-stories"><h3>ЕЩЁ ОДНА ИСТОРИЯ ЭТОГО МЕСТА</h3>${other.map(o=>`<button class="other-story-button" data-story="${o.id}"><span>${esc(o.title)}<small>${esc(o.name)} · ${esc(o.period)}</small></span><span>↗</span></button>`).join('')}</div>`:''}
-      <div class="other-stories"><h3>РЯДОМ НА КАРТЕ</h3>${places.filter(x=>x.id!==p.id).sort((a,b)=>map.distance([p.lat,p.lng],[a.lat,a.lng])-map.distance([p.lat,p.lng],[b.lat,b.lng])).slice(0,2).map(x=>`<button class="other-story-button" data-story="${stories.find(y=>y.place===x.id).id}"><span>${esc(x.name)}<small>${km(map.distance([p.lat,p.lng],[x.lat,x.lng])/1000)} км по прямой</small></span><span>↗</span></button>`).join('')}</div></div>`;
+      <div class="other-stories"><h3>РЯДОМ НА КАРТЕ</h3>${places.filter(x=>x.id!==p.id).sort((a,b)=>distance([p.lat,p.lng],[a.lat,a.lng])-distance([p.lat,p.lng],[b.lat,b.lng])).slice(0,2).map(x=>`<button class="other-story-button" data-story="${stories.find(y=>y.place===x.id).id}"><span>${esc(x.name)}<small>${km(distance([p.lat,p.lng],[x.lat,x.lng])/1000)} км по прямой</small></span><span>↗</span></button>`).join('')}</div></div>`;
   }
   function toggleRoute(id){
     const adding=!state.route.includes(id);state.route=adding?[...state.route,id]:state.route.filter(x=>x!==id);state.walking=false;
@@ -186,15 +205,15 @@
     $('openRoute').innerHTML=state.route.length?'Моя прогулка <span>↗</span>':'Собрать прогулку <span>↗</span>';
     $('dockAvatars').innerHTML=state.route.slice(0,3).map(id=>{const s=storyById(id);return `<span style="background:${s.color}">${esc(s.name[0])}</span>`;}).join('');
   }
-  function openRoute(){closeDetail();$('routePanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');map.invalidateSize();setNav('routes');renderRoute();if(routePlaces().length>1)fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));updateRouteGeometry();}
-  function closeRoute(){if($('routePanel').hidden)return;$('routePanel').hidden=true;if($('detailPanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');map.invalidateSize();setNav('map');if(state.walking){state.walking=false;}}
+  function openRoute(){closeDetail();$('routePanel').hidden=false;document.querySelector('.workspace').classList.add('panel-open');setNav('routes');renderRoute();if(routePlaces().length>1)fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));updateRouteGeometry();}
+  function closeRoute(){if($('routePanel').hidden)return;$('routePanel').hidden=true;if($('detailPanel').hidden)document.querySelector('.workspace').classList.remove('panel-open');setNav('map');if(state.walking){state.walking=false;}}
   function renderRoute(){
     const points=routePlaces(),seconds=state.route.reduce((n,id)=>n+storyById(id).readingMinutes*60,0);
     const info=state.routeInfo;
     $('routePanel').innerHTML=`<div class="panel-top"><button class="panel-back" data-close-route>${icon('arrow')} На карту</button><button class="panel-close" data-close-route aria-label="Закрыть прогулку">${icon('close')}</button></div>
     <div class="route-header"><div class="eyebrow">ДВОР / ЛИЧНЫЙ МАРШРУТ</div><h2>Москва твоими<br>шагами<span class="amber-dot">.</span></h2><p>${state.route.length?'Твой маршрут из личных историй. Порядок можно менять стрелками у каждой истории.':'Выбери истории на карте — или начни с нашей первой прогулки по Сокольникам.'}</p></div>
     ${state.route.length?`<div class="route-summary"><div><b>${points.length}</b>МЕСТА</div><div><b>${info?.status==='ready'?km(info.length):'—'} <small>км</small></b>ПЕШКОМ</div><div><b>${info?.status==='ready'?Math.ceil((info.time+seconds)/60):Math.ceil(seconds/60)} <small>мин</small></b>${info?.status==='ready'?'С ЧТЕНИЕМ':'НА ЧТЕНИЕ'}</div></div>
-    <div class="route-status">${info?.status==='ready'?'Пеший маршрут по дорожкам и улицам. Время включает примерные остановки на чтение.':info?.status==='loading'?'Ищем пешеходные дорожки…':points.length<2?'Одна точка: открой её в навигаторе или добавь ещё одну.':'Показан порядок мест, соединённых пунктиром. Для пешего пути открой навигацию.'}</div>
+    <div class="route-status">${info?.status==='ready'?'Пеший маршрут по дорожкам и улицам. Время включает примерные остановки на чтение.':info?.status==='loading'?'Ищем пешеходные дорожки…':points.length<2?'Одна точка: открой её в навигаторе или добавь ещё одну.':'Показан порядок мест. Для пешего пути открой навигацию.'}</div>
     ${state.walking?walkingHTML():''}<div class="route-stops">${state.route.map((id,i)=>{const s=storyById(id),p=placeById(s.place),number=points.findIndex(x=>x.id===p.id)+1;return `<div class="route-stop"><span class="stop-number">${number}</span><div class="stop-content"><button data-story="${id}">${esc(s.title)}</button><p>${esc(p.name)}<br>${esc(s.name)} · ~${s.readingMinutes} мин чтения</p></div><div class="stop-tools"><button data-move="${id}" data-direction="-1" ${i===0?'disabled':''} aria-label="Переместить историю выше">↑</button><button data-move="${id}" data-direction="1" ${i===state.route.length-1?'disabled':''} aria-label="Переместить историю ниже">↓</button><button data-add="${id}" aria-label="Убрать историю из прогулки">×</button></div></div>`;}).join('')}</div>
     <div class="route-bottom"><button class="button dark" data-start-walk>${state.walking?'Завершить прогулку':'Начать прогулку'} ${icon('route')}</button><a class="button amber" href="${navigationURL()}" target="_blank" rel="noopener">Открыть пешую навигацию ↗</a><div class="two-buttons"><button class="button secondary" data-save-route>Сохранить ${icon('bookmark')}</button><button class="button secondary" data-share-route>Ссылка ${icon('share')}</button></div><div class="two-buttons"><button class="button secondary" data-export-route>Скачать GPX ${icon('download')}</button></div><p class="route-saved-note">Выбранные истории сохранены ${storageAvailable?'в этом браузере.':'только до закрытия страницы — хранилище недоступно.'}</p><button class="route-clear" data-clear-route>Очистить прогулку</button>${savedHTML()}</div>`:
     `<div class="route-empty"><div class="pilot-card"><div class="eyebrow">ПЕРВАЯ ПРОГУЛКА / СОКОЛЬНИКИ</div><h3>Три места.<br>Шесть личных историй</h3><p>3 места · 6 историй<br>Главный вход → фонтан → аллея у ротонды</p><button class="button dark" data-pilot>Выбрать эти истории ↗</button></div>${savedHTML()}</div>`}`;
@@ -207,28 +226,40 @@
   }
   function navigationURL(){const points=routePlaces();return `https://yandex.ru/maps/?mode=routes&rtt=pd&rtext=${points.map(p=>`${p.lat},${p.lng}`).join('~')}`;}
   async function updateRouteGeometry(){
+    if(!map)return;
     const points=routePlaces();routeToken++;const token=routeToken;
-    routeController?.abort();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}if(routeLabel){map.removeLayer(routeLabel);routeLabel=null;}
+    routeController?.abort();if(routeLayer){routeLayer.remove();routeLayer=null;}if(routeLabel){routeLabel.remove();routeLabel=null;}
     if(points.length<2){state.routeInfo=null;renderDock();return;}
-    routeLayer=L.polyline(points.map(p=>[p.lat,p.lng]),{color:'#ac8740',weight:3,opacity:.65,dashArray:'5 9',interactive:false}).addTo(map);
     const key=points.map(p=>p.id).join(',');
     if(routeCache.has(key)){applyRoute(routeCache.get(key));return;}
     state.routeInfo={status:'loading'};if(!$('routePanel').hidden)renderRoute();
     const controller=new AbortController();routeController=controller;const timeout=setTimeout(()=>controller.abort(),12000);
     try{
-      let data;
-      if(key==='entrance,fountain,rotonda'){
-        const local=await fetch('assets/pilot-route.json',{signal:controller.signal});if(local.ok)data=await local.json();
-      }
-      if(!data?.trip){const json={locations:points.map(p=>({lat:p.lat,lon:p.lng,type:'break'})),costing:'pedestrian',directions_options:{units:'kilometers',language:'ru-RU'},shape_format:'polyline6'};
-        const response=await fetch(`https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(json))}`,{signal:controller.signal});if(!response.ok)throw new Error('route unavailable');data=await response.json();}
+      const result=await localWalkingRoute(points,controller.signal);
       if(token!==routeToken)return;
-      if(!data.trip?.legs?.length)throw new Error('route unavailable');
-      const coords=data.trip.legs.flatMap(l=>decodePolyline(l.shape));
-      const result={status:'ready',length:data.trip.summary.length,time:data.trip.summary.time,coords};routeCache.set(key,result);applyRoute(result);
+      routeCache.set(key,result);applyRoute(result);
     }catch{if(token!==routeToken)return;state.routeInfo={status:'unavailable'};renderDock();if(!$('routePanel').hidden)renderRoute();}
     finally{clearTimeout(timeout);}
-    function applyRoute(info){state.routeInfo=info;if(routeLayer)map.removeLayer(routeLayer);routeLayer=L.polyline(info.coords,{color:'#9e7935',weight:4,opacity:.9,interactive:false}).addTo(map);renderDock();if(!$('routePanel').hidden)renderRoute();}
+    function applyRoute(info){state.routeInfo=info;if(routeLayer)routeLayer.remove();routeLayer=EvaMaps.polyline(info.coords.map(toMap),{color:'#9e7935',weight:4,opacity:.9}).addTo(map);renderDock();if(!$('routePanel').hidden)renderRoute();}
+  }
+  // The current collection uses a local pedestrian path, so every ordering works without a foreign routing API.
+  async function localWalkingRoute(points,signal){
+    const ids=['entrance','fountain','rotonda'];
+    if(points.some(p=>!ids.includes(p.id)))throw new Error('No local path for this location');
+    const response=await fetch('assets/pilot-route.json',{signal});
+    if(!response.ok)throw new Error('Local route unavailable');
+    const data=await response.json(),legs=data.trip?.legs;
+    if(!legs||legs.length!==2)throw new Error('Local route invalid');
+    const coords=[];let length=0,time=0;
+    for(let i=1;i<points.length;i++){
+      const from=ids.indexOf(points[i-1].id),to=ids.indexOf(points[i].id),step=from<to?1:-1;
+      for(let at=from;at!==to;at+=step){
+        const leg=legs[step>0?at:at-1],segment=decodePolyline(leg.shape);
+        if(step<0)segment.reverse();
+        coords.push(...(coords.length?segment.slice(1):segment));length+=leg.summary.length;time+=leg.summary.time;
+      }
+    }
+    return {status:'ready',length,time,coords};
   }
   function decodePolyline(str){let index=0,lat=0,lng=0,result=[];while(index<str.length){let shift=0,value=0,byte;do{byte=str.charCodeAt(index++)-63;value|=(byte&31)<<shift;shift+=5;}while(byte>=32);lat+=(value&1)?~(value>>1):(value>>1);shift=0;value=0;do{byte=str.charCodeAt(index++)-63;value|=(byte&31)<<shift;shift+=5;}while(byte>=32);lng+=(value&1)?~(value>>1):(value>>1);result.push([lat/1e6,lng/1e6]);}return result;}
   function pilotRoute(){state.route=places.filter(p=>p.district==='Сокольники').flatMap(p=>stories.filter(s=>s.place===p.id).map(s=>s.id));state.walking=false;persistRoute();renderList();renderDock();openRoute();toast('Шесть историй Сокольников — в твоей прогулке');}
@@ -245,9 +276,14 @@
     if(state.nearby){state.nearby=null;renderList();toast('Снова показываем все районы');return;}
     if(!navigator.geolocation){toast('Геолокация недоступна в этом браузере');return;}
     const btn=$('nearbyButton');btn.disabled=true;
-    navigator.geolocation.getCurrentPosition(pos=>{btn.disabled=false;const ll=L.latLng(pos.coords.latitude,pos.coords.longitude);state.nearby=ll;state.district='all';$('districtSelect').value='all';if(userMarker)map.removeLayer(userMarker);userMarker=L.circleMarker(ll,{radius:6,fillColor:'#527bdc',fillOpacity:1,color:'#fff',weight:3}).addTo(map);renderList();if(filteredStories().length){map.flyTo(ll,14,{animate:motion});toast('Истории в радиусе двух километров');}else toast('Рядом пока нет историй. Выбери район на карте Москвы.');},error=>{btn.disabled=false;toast(error.code===1?'Разреши геолокацию в настройках браузера или выбери район.':'Не удалось определить местоположение. Выбери район вручную.');},{timeout:10000,maximumAge:60000,enableHighAccuracy:false});
+    navigator.geolocation.getCurrentPosition(pos=>{btn.disabled=false;const ll=[pos.coords.latitude,pos.coords.longitude];state.nearby=ll;state.district='all';$('districtSelect').value='all';if(userMarker)userMarker.remove();if(map)userMarker=EvaMaps.marker(toMap(ll),{appearance:'dot',color:'#527bdc',title:'Ты здесь',keyboard:false}).addTo(map);renderList();if(filteredStories().length){if(map)map.flyTo(toMap(ll),14,{duration:motion?350:0});toast('Истории в радиусе двух километров');}else toast('Рядом пока нет историй. Выбери район на карте Москвы.');},error=>{btn.disabled=false;toast(error.code===1?'Разреши геолокацию в настройках браузера или выбери район.':'Не удалось определить местоположение. Выбери район вручную.');},{timeout:10000,maximumAge:60000,enableHighAccuracy:false});
   }
   function bindEvents(){
+    $('retryTiles').addEventListener('click',startMap);
+    $('zoomIn').addEventListener('click',()=>map?.zoomIn());$('zoomOut').addEventListener('click',()=>map?.zoomOut());
+    $('resetView').addEventListener('click',()=>focusSokolniki(false));
+    $('moscowButton').addEventListener('click',()=>{resetFilters();closeDetail();closeRoute();fitCoordinates([[55.59,37.35],[55.92,37.89]]);$('moscowButton').classList.add('selected');});
+    $('sokolnikiButton').addEventListener('click',()=>focusSokolniki(true));$('nearbyButton').addEventListener('click',locateUser);
     $('searchInput').addEventListener('input',e=>{state.query=e.target.value;renderList();});
     $('districtSelect').addEventListener('change',e=>{state.district=e.target.value;state.nearby=null;renderList();const coords=places.filter(p=>state.district==='all'||p.district===state.district).map(p=>[p.lat,p.lng]);if(coords.length===1)flyToPlace(places.find(p=>p.district===state.district));else fitCoordinates(coords);});
     $('themeFilters').addEventListener('click',e=>{const t=e.target.closest('[data-theme]');if(!t)return;state.theme=t.dataset.theme;renderList();});
@@ -282,17 +318,18 @@
 
   }
   function enterMap(){
-    const firstVisit=!map;
+    const firstVisit=!appStarted;
     $('introScreen').hidden=true;$('introScreen').inert=true;
     $('siteHeader').hidden=false;$('siteHeader').inert=false;
     $('mapWorkspace').hidden=false;$('mapWorkspace').inert=false;
     if(firstVisit){
-      initMap();bindEvents();renderList();renderDock();
+      appStarted=true;bindEvents();renderList();renderDock();
       const storyParam=new URL(location.href).searchParams.get('story');
       if(storyParam&&storyById(storyParam))openStory(storyParam);
       if(routeParam&&state.route.length)openRoute();
       else if(state.route.length)updateRouteGeometry();
-    }else map.invalidateSize();
+    }
+    if(!map)startMap();
     $('mapWorkspace').focus({preventScroll:true});
   }
   function showIntro(){
