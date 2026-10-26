@@ -78,3 +78,5 @@
 #map .eva-attribution{font-family:Golos,Arial,sans-serif;font-size:10px;line-height:1.5;background:#fbf9f4ed;color:#796b58;z-index:30}#map .eva-attribution a{color:#665945;text-decoration:underline}#map .eva-scale{right:12px;left:auto;bottom:30px;font:9px Golos,Arial,sans-serif;color:#8f7c62}
 
 @media(max-width:760px){#map .eva-attribution{top:50px;bottom:auto;right:12px;left:auto;padding:0 4px;font-size:9px;line-height:14px;white-space:nowrap}}
+
+.story-kind{display:inline-flex;border:1px solid #e5d9c8;border-radius:20px;padding:5px 10px;color:#a18c71;font-size:9px;margin:-7px 0 20px}.story-text .story-provenance{font-size:10px!important;line-height:1.7!important;color:#ad9a82!important;border-top:1px solid #e5d9c8;padding-top:16px;margin-top:26px!important}

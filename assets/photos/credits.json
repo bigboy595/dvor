@@ -36,6 +36,27 @@
     "licenseUrl": "",
     "source": "https://commons.wikimedia.org/wiki/File:Chistye_prudy.jpeg",
     "title": "Chistye prudy.jpeg",
-    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода."
+    "note": "Фотография места или его окрестностей, не иллюстрация описанного эпизода.",
+    "caption": "Чистые пруды, Чистопрудный бульвар"
+  },
+  "medvedkovo": {
+    "src": "assets/photos/medvedkovo.webp",
+    "artist": "Игорь С",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Church_in_Medvedkovo.jpg",
+    "title": "Church in Medvedkovo.jpg",
+    "caption": "Покровский храм в Медведкове, Заповедная улица",
+    "note": "Фотография реального места. Рассказчик и события этой художественной истории вымышлены."
+  },
+  "presnya": {
+    "src": "assets/photos/presnya.webp",
+    "artist": "Akkit",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Bridge_in_Krasnaya_Presnya_Park.JPG",
+    "title": "Bridge in Krasnaya Presnya Park.JPG",
+    "caption": "Мостик в парке «Красная Пресня»",
+    "note": "Фотография реального места. Рассказчик и события этой художественной истории вымышлены."
   }
 }

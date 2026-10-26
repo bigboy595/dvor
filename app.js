@@ -107,7 +107,7 @@
       if(state.route.length)updateRouteGeometry();
       if(state.active)flyToPlace(placeById(storyById(state.active).place));
       else if(!$('routePanel').hidden&&routePlaces().length>1)fitCoordinates(routePlaces().map(p=>[p.lat,p.lng]));
-      else if(innerWidth<=760)map.panBy(0,100);
+      else fitCoordinates(places.map(p=>[p.lat,p.lng]));
     }catch{
       clearTimeout(mapLoadTimer);map?.destroy();map=null;markers.clear();
       $('mapError').hidden=false;$('map').setAttribute('aria-busy','false');
@@ -179,7 +179,7 @@
   }
   function storyHTML(s){
     const p=placeById(s.place);
-    return `<div class="story-text">${s.text.map((t,i)=>`<p>${esc(t)}</p>${i===1?photoFigure(p):''}`).join('')}</div>`;
+    return `<div class="story-text">${s.text.map((t,i)=>`<p>${esc(t)}</p>${i===1?photoFigure(p):''}`).join('')}${s.fictional?'<p class="story-provenance">Художественный рассказ. Рассказчик и события вымышлены; место на карте настоящее.</p>':''}</div>`;
   }
   function renderDetail(){
     const s=storyById(state.active);if(!s)return;const p=placeById(s.place),added=state.route.includes(s.id),saved=state.bookmarks.includes(s.id);
@@ -187,7 +187,7 @@
     $('detailPanel').innerHTML=`<div class="panel-top"><button class="panel-back" data-close-detail>${icon('arrow')} К историям</button><button class="panel-close" data-close-detail aria-label="Закрыть историю">${icon('close')}</button></div>
       <div class="detail-content"><div class="detail-location">${esc(p.district)} / ${esc(p.name)}</div><h2>${esc(s.title)}</h2><div class="narrator"><div class="avatar" style="background:${s.color}">${esc(s.name[0])}</div><div class="narrator-copy"><strong>${esc(s.name)}</strong><span>${esc(s.connection)}</span></div></div>
       <div class="reading-meta">${icon('text')} ${s.readingMinutes} мин чтения <span>·</span> ${esc(s.period)}</div>
-      <article class="story-article" aria-label="Текст истории: ${esc(s.title)}">${storyHTML(s)}</article><div class="detail-tags"><span>${esc(s.theme)}</span><span>${esc(s.period)}</span><span>${esc(p.district)}</span></div>
+      ${s.fictional?'<div class="story-kind">Художественный рассказ</div>':''}<article class="story-article" aria-label="Текст истории: ${esc(s.title)}">${storyHTML(s)}</article><div class="detail-tags"><span>${esc(s.theme)}</span><span>${esc(s.period)}</span><span>${esc(p.district)}</span></div>
       <div class="detail-actions"><button class="button ${added?'dark':'amber'}" data-add="${s.id}">${added?'✓ В твоей прогулке':'+ Добавить в прогулку'}</button><button class="icon-button" data-bookmark="${s.id}" aria-label="${saved?'Убрать из сохранённых':'Сохранить историю'}" aria-pressed="${saved}" style="${saved?'background:#fff0c8':''}">${icon('bookmark')}</button><button class="icon-button" data-share-story="${s.id}" aria-label="Поделиться историей">${icon('share')}</button></div>
       ${other.length?`<div class="other-stories"><h3>ЕЩЁ ОДНА ИСТОРИЯ ЭТОГО МЕСТА</h3>${other.map(o=>`<button class="other-story-button" data-story="${o.id}"><span>${esc(o.title)}<small>${esc(o.name)} · ${esc(o.period)}</small></span><span>↗</span></button>`).join('')}</div>`:''}
       <div class="other-stories"><h3>РЯДОМ НА КАРТЕ</h3>${places.filter(x=>x.id!==p.id).sort((a,b)=>distance([p.lat,p.lng],[a.lat,a.lng])-distance([p.lat,p.lng],[b.lat,b.lng])).slice(0,2).map(x=>`<button class="other-story-button" data-story="${stories.find(y=>y.place===x.id).id}"><span>${esc(x.name)}<small>${km(distance([p.lat,p.lng],[x.lat,x.lng])/1000)} км по прямой</small></span><span>↗</span></button>`).join('')}</div></div>`;
