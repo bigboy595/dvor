@@ -8,7 +8,7 @@
   <title>ДВОР — у каждого места есть голос</title>
   <link rel="icon" type="image/svg+xml" href="assets/mark.svg">
   <link rel="stylesheet" href="https://evamaps.ru/sdk/1/evamaps.css">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
   <main class="intro-screen" id="introScreen" aria-labelledby="introTitle">
@@ -87,7 +87,7 @@
     </section>
     <button class="mobile-list-button" id="mobileListButton"><span data-icon="list"></span> Истории <span>9</span></button>
 
-    <aside class="detail-panel" id="detailPanel" hidden aria-label="Карточка истории"></aside>
+    <dialog class="reader-dialog" id="detailPanel" hidden aria-labelledby="readerTitle"></dialog>
     <aside class="route-panel" id="routePanel" hidden aria-label="Конструктор прогулки"></aside>
   </main>
 
@@ -105,6 +105,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="data.js?v=6"></script>
   <script src="photos.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="walk.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
